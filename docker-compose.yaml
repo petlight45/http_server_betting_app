@@ -12,7 +12,7 @@ services:
     env_file:
       - .env
     ports:
-      - 6000:5000
+      - 6008:5000
     depends_on:
       - mongodb
     volumes:
