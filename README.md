@@ -25,16 +25,20 @@ To get started with this project, follow these steps:
 
 1. **Clone the Repository**
 
-   ```bash
-   https://github.com/petlight45/task-management-backend-http.git
-   cd task-management-backend-http
-   
+```
+git clone https://github.com/petlight45/task-management-backend-http.git
+```
+2. **Change directory 
+```
+gcd task-management-backend-http
+```
 ## Configuration
    
 1. **Set up environmental variables**
 
-   ```bash
+   ```
    cp .env.example .env
+   ```
  Update the .env file with your local configuration values.
  
  EXPRESS_APP_DATABASE_URL = The connection uri to the mongo db database to be used by this app
@@ -59,15 +63,17 @@ To get started with this project, follow these steps:
  
  Install docker and docker compose on your operating environment
  
- Run this
+ For linux, Windows or Old Mac run
  
-    ```bash
+    ```
     docker-compose up --build
+    ```
     
-Or this, in case the above did not work
+For newer Mac
 
-      ```bash
+      ```
       docker compose up --build
+      ```
 
 ## Testing
  
@@ -77,7 +83,7 @@ Or this, in case the above did not work
  
  Run this
  
-    ```bash
+    ```
     npm install
     npm test
     
