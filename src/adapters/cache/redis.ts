@@ -10,7 +10,7 @@ type RedisAdapterParams = {
 export class RedisAdapter implements CachePort {
     private appConfig;
     private logger;
-    client: Redis | null;
+    public client: Redis | any;
 
 
     constructor(params: RedisAdapterParams) {
@@ -23,7 +23,7 @@ export class RedisAdapter implements CachePort {
         this.client = new Redis(this.appConfig.REDIS_URL, {maxRetriesPerRequest: null});
 
         // Handle connection errors
-        this.client.on('error', (err) => this.logger.error(err));
+        this.client.on('error', (err: Error) => this.logger.error(err));
 
         // Wait for the connection to be established
         await this.client.ping(); // Optionally ping the server to check if it's ready
