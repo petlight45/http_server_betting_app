@@ -29,15 +29,16 @@ git clone https://github.com/petlight45/http_server_betting_app.git
 ```
 2. **Change directory 
 ```
-gcd task-management-backend-http
+cd http_server_betting_app
 ```
 ## Configuration
    
 1. **Set up environmental variables**
 
-   ```
-   cp .env.example .env
-   ```
+```
+cp .env.example .env
+```
+
  Update the .env file with your local configuration values.
  
  EXPRESS_APP_DATABASE_URL = The connection uri to the mongo db database to be used by this app

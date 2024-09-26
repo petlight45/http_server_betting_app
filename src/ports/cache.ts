@@ -1,8 +1,8 @@
-import {RedisClientType} from 'redis';
+import Redis from 'ioredis';
 
 
 export interface CachePort {
-    client: RedisClientType | null
+    client: Redis | null
 
     connectAndInitializeClient(): Promise<void>
 

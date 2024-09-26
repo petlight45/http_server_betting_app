@@ -22,6 +22,7 @@ export class BullMQAdapter implements MessageQueuePort {
     }
 
     getQueue(queueName: string): Queue {
+        // @ts-ignore
         return new Queue(queueName, {connection: this.cache.client});
     }
 
