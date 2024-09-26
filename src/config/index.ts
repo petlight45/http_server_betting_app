@@ -47,5 +47,8 @@ export default class AppConfig {
         return Number.parseInt(process.env.EXPRESS_APP_ACTIVE_GAMES_COUNT || '10')
     }
 
+    static get GAME_DURATION_IN_MINUTES(): number {
+        return Number.parseInt(process.env.EXPRESS_APP_GAME_DURATION_IN_MINUTES || '10')
+    }
 
 }

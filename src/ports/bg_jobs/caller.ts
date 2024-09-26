@@ -6,22 +6,25 @@ import {DateTimeHelpers} from "../helpers/commons/date_time";
 
 export type BGJobCallerParams = {
     messageQueue: MessageQueuePort,
-    gameService: GameService
+    gameService: GameService;
+    appConfig: any
 };
 
 
 export default class BGJobCaller {
     private messageQueue: MessageQueuePort;
     private gameService: GameService;
+    private appConfig: any
 
     constructor(params: BGJobCallerParams) {
         this.messageQueue = params.messageQueue;
         this.gameService = params.gameService;
+        this.appConfig = params.appConfig;
     }
 
     async endGameState(gameId: string) {
         const gameObj: Game = await this.gameService.fetchSingleGame(gameId)
-        const offsetTo90secs = (90 * 60) - DateTimeHelpers.computeSecondsBetweenStartEndTime(gameObj.startedAt as Date)
+        const offsetTo90secs = (this.appConfig.GAME_DURATION_IN_MINUTES * 60) - DateTimeHelpers.computeSecondsBetweenStartEndTime(gameObj.startedAt as Date)
         const jobName = "End Game state after 90 secs"
         const jobId = jobName + gameId
         this.messageQueue.addJobToQueue(
