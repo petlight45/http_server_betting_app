@@ -32,7 +32,7 @@ export default class GameEvent {
         return {
             type: faker.helpers.arrayElement(Object.values(GameEventTypeEnum)),
             team: faker.helpers.arrayElement(Object.values(GameEventTeamEnum)),
-            player: faker.lorem.words(1),
+            player: faker.person.firstName(),
             ...(data || {})
         }
     }

@@ -1,11 +1,14 @@
 import GameEvent, {GameEventParams} from "./index";
 import {LoggerPort} from "../../../ports/logger";
+import {WebsocketPayloadDataType} from "../../../ports/ws/data_types";
+import WSDispatcher from "../../../ports/ws/dispatcher";
 
 type GameEventServiceParams = {
     gameEventRepository: any;
     messageQueue: any
     appConfig: any
     logger: LoggerPort
+    wsDispatcher: WSDispatcher
 };
 
 export default class GameEventService {
@@ -13,6 +16,7 @@ export default class GameEventService {
     private messageQueue?: any;
     private appConfig?: any;
     private logger?: any;
+    private wsDispatcher: WSDispatcher;
 
 
     constructor(params: GameEventServiceParams) {
@@ -20,11 +24,16 @@ export default class GameEventService {
         this.messageQueue = params.messageQueue;
         this.appConfig = params.appConfig;
         this.logger = params.logger;
+        this.wsDispatcher = params.wsDispatcher;
     }
 
     async createGameEvent(data: GameEventParams): Promise<GameEvent> {
         const gameEvent = new GameEvent(data)
-        return await this.gameEventRepository.create(gameEvent);
+        return await this.gameEventRepository.create(gameEvent).then((res: any) => {
+            this.wsDispatcher.dispatchData(WebsocketPayloadDataType.GAME_EVENT, gameEvent)
+            return res
+        });
+
     }
 
     async fetchMultipleGameEvents(filterParams?: any, sortParams?: any, expansionParams?: any): Promise<GameEvent[]> {

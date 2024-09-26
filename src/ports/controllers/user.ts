@@ -117,4 +117,14 @@ export default class UserController {
         // @ts-ignore
         return user.is_success && res.status(HTTPResponseStatusCode.SUCCESS).json({"message": "Operation Successful"});
     }
+
+    async fetchLeaderBoard(req: Request, res: Response, next: NextFunction): Promise<Response | void> {
+        const leaderBoard = await ExceptionsHelper.executeCallbackAsync({
+            // @ts-ignore
+            callback: async () => (await this.userService.fetchLeaderBoard()),
+            on_error: next
+        });
+        // @ts-ignore
+        return leaderBoard.is_success && res.status(HTTPResponseStatusCode.SUCCESS).json(leaderBoard.data);
+    }
 }

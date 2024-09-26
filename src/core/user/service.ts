@@ -8,12 +8,19 @@ import {CachePort} from "../../ports/cache";
 import UserTransactionService from "./user_transaction/service";
 import {UserTransactionParams} from "./user_transaction";
 import {UserTransactionTypeEnum} from "./user_transaction/enums";
+import Bet from "../bet";
+import {BetStateEnum} from "../bet/enums";
+import container from "../../infrastructure/container";
+import {LeaderboardItemParams} from "../leaderboard";
+import WSDispatcher from "../../ports/ws/dispatcher";
+import {WebsocketPayloadDataType} from "../../ports/ws/data_types";
 
 type UserServiceParams = {
     userRepository: any;
     authService: any
     cache: CachePort;
     userTransactionService: UserTransactionService;
+    wsDispatcher: WSDispatcher
 };
 
 type UserServiceParamsRegisterUser = {
@@ -42,6 +49,7 @@ export default class UserService {
     private authService?: any;
     private cache: CachePort;
     private userTransactionService: UserTransactionService;
+    private wsDispatcher: WSDispatcher;
 
 
     constructor(params: UserServiceParams) {
@@ -49,6 +57,7 @@ export default class UserService {
         this.authService = params.authService;
         this.cache = params.cache
         this.userTransactionService = params.userTransactionService;
+        this.wsDispatcher = params.wsDispatcher;
 
     }
 
@@ -174,7 +183,78 @@ export default class UserService {
             amount: amount
         } as UserTransactionParams
         await this.userTransactionService.createUserTransaction(payload)
+    }
 
+    async getBets(id: string): Promise<Bet[]> {
+        const betService = await container.resolve("betService")
+        // @ts-ignore
+        const user = new User({_id: id} as UserParams);
+        let bets: string[] = await this.cache.retrieveSetMembers(user.cache_set_key_bets);
+        if (bets) {
+            const newBets = []
+            for (let item of bets) {
+                const cached_item = await this.cache.getValue(item)
+                let betData;
+                if (!cached_item) {
+                    betData = await betService?.fetchSingleBet(item)
+                    await this.cache.setValue(item, betData)
+                } else {
+                    betData = cached_item
+                }
+                newBets.push(betData)
+            }
+            return newBets;
+        } else {
+            const filterParams = {
+                userId: id
+            }
+            const response = await betService?.fetchMultipleBets(filterParams)
+            if (response) {
+                for (let item of response) {
+                    await this.cache.setValue(item._id as string, item)
+                    await this.cache.addKeyToSet(item._id as string, user.cache_set_key_bets)
+                }
+            }
+            return response || []
+        }
+    }
 
+    async updateUserLeaderBoardStats(id: string) {
+        let user: User = new User(await this.fetchSingleUser(id))
+        const bets: Bet[] = await this.getBets(id)
+        const leaderboardStats: LeaderboardItemParams = {
+            userId: user._id as string,
+            userName: user.username as string,
+            totalWins: 0,
+            totalLosses: 0,
+            totalProfits: 0,
+        }
+        if (bets) {
+            for (let bet of bets) {
+                if (bet.state === BetStateEnum.WIN) {
+                    // @ts-ignore
+                    const profit = (Number.parseFloat(bet.amount) * bet.odds) - Number.parseFloat(bet.amount)
+                    leaderboardStats.totalWins++
+                    leaderboardStats.totalProfits += profit
+                } else if (bet.state === BetStateEnum.LOSS) {
+                    leaderboardStats.totalLosses++
+                }
+            }
+        }
+        await this.cache.setValue(user.cache_key_leaderboard_stat, leaderboardStats)
+        await this.cache.addKeyToSet(user.cache_key_leaderboard_stat, User.cache_key_leaderboard_stat_all)
+        this.wsDispatcher.dispatchData(WebsocketPayloadDataType.LEADERBOARD, leaderboardStats)
+    }
+
+    async fetchLeaderBoard() {
+        const cachedLeaderBoards: string[] = (await this.cache.retrieveSetMembers(User.cache_key_leaderboard_stat_all)) || []
+        const leaderBoards: LeaderboardItemParams[] = []
+        for (let item of cachedLeaderBoards) {
+            const val = await this.cache.getValue(item);
+            if (val) {
+                leaderBoards.push(val)
+            }
+        }
+        return leaderBoards
     }
 }

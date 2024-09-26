@@ -4,12 +4,15 @@ import {UserTransactionParams} from "../user/user_transaction";
 import {UserTransactionTypeEnum} from "../user/user_transaction/enums";
 import {BetStateEnum} from "./enums";
 import container from "../../infrastructure/container";
+import User, {UserParams} from "../user";
+import {CachePort} from "../../ports/cache";
 
 type BetServiceParams = {
     betRepository: any;
     messageQueue: any
     appConfig: any
     logger: LoggerPort;
+    cache: CachePort;
 };
 
 export default class BetService {
@@ -17,6 +20,7 @@ export default class BetService {
     private messageQueue?: any;
     private appConfig?: any;
     private logger?: any;
+    private cache: CachePort;
 
 
     constructor(params: BetServiceParams) {
@@ -24,6 +28,22 @@ export default class BetService {
         this.messageQueue = params.messageQueue;
         this.appConfig = params.appConfig;
         this.logger = params.logger;
+        this.cache = params.cache;
+    }
+
+    async refreshBetOnUserCache(userId: string, betId: string) {
+        const userService = container.resolve("userService")
+        const user = new User({_id: userId} as UserParams);
+        let bets: Bet[] = await this.cache.retrieveSetMembers(user.cache_set_key_bets);
+        if (!bets) {
+            await this.cache.setValue(user.cache_set_key_bets, await this.fetchMultipleBets({
+                userId
+            }))
+        } else {
+            await this.cache.deleteSetKey(betId, user.cache_set_key_bets)
+            await this.cache.addKeyToSet(betId, user.cache_set_key_bets)
+        }
+        await userService.updateUserLeaderBoardStats(userId)
     }
 
     async createBet(data: BetParams): Promise<Bet> {
@@ -37,7 +57,9 @@ export default class BetService {
                     amount: bet.amount
                 } as UserTransactionParams
                 await userTransactionService.createUserTransaction(payload)
+                await this.refreshBetOnUserCache(bet.userId as string, bet._id as string)
             }
+            return bet;
         });
     }
 
@@ -54,6 +76,8 @@ export default class BetService {
     }
 
     async deleteBet(id: string, filterParams?: any) {
+        const bet: Bet = await this.fetchSingleBet(id);
+        await this.refreshBetOnUserCache(bet.userId as string, bet._id as string)
         return await this.betRepository.delete({_id: id, ...filterParams});
     }
 
@@ -64,12 +88,14 @@ export default class BetService {
             const payload: UserTransactionParams = {
                 userId: bet.userId,
                 type: UserTransactionTypeEnum.CREDIT,
-                amount: bet.amount * bet.odds
+                // @ts-ignore
+                amount: Number.parseFloat(bet.amount) * bet.odds
             } as UserTransactionParams
             await userTransactionService.createUserTransaction(payload)
             await this.updateBet(id, {
                 state: BetStateEnum.WIN
             })
+            await this.refreshBetOnUserCache(bet.userId as string, bet._id as string)
         }
     }
 
@@ -77,8 +103,9 @@ export default class BetService {
         const bet: Bet = await this.fetchSingleBet(id)
         if (bet.state === BetStateEnum.PENDING) {
             await this.updateBet(id, {
-                state: BetStateEnum.WIN
+                state: BetStateEnum.LOSS
             })
+            await this.refreshBetOnUserCache(bet.userId as string, bet._id as string)
         }
     }
 }

@@ -3,6 +3,7 @@ import {BGJobType} from "./job_types";
 import GameService from "../../core/game/service";
 import Game from "../../core/game";
 import {DateTimeHelpers} from "../helpers/commons/date_time";
+import {WebsocketPayloadDataType} from "../ws/data_types";
 
 export type BGJobCallerParams = {
     messageQueue: MessageQueuePort,
@@ -58,6 +59,16 @@ export default class BGJobCaller {
             {userId},
             0,
             jobId
+        )
+    }
+
+    async sendToWebsocketMessageQueue(dataType: WebsocketPayloadDataType, payload: any) {
+        const jobName = "Send object to websocket queue: "
+        this.messageQueue.addJobToQueue(
+            this.messageQueue.getQueue(this.appConfig.MESSAGE_QUEUE_NAME_WS_SERVICE),
+            jobName,
+            {type: dataType, data: payload},
+            0
         )
     }
 }

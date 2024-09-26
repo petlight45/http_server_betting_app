@@ -32,6 +32,8 @@ router.post('/register', [validateRequestBodyMiddleware(UserRegister),
 // @ts-ignore
 router.post('/login', [validateRequestBodyMiddleware(UserLogin)], (req, res, next) => userController.loginUser(req, res, next))
 // @ts-ignore
+router.get('/leaderboard', [permissionIsAuthenticatedMiddleware], (req, res, next) => userController.fetchLeaderBoard(req, res, next))
+// @ts-ignore
 router.get('/me', [permissionIsAuthenticatedMiddleware], (req, res, next) => userController.fetchProfile(req, res, next))
 // @ts-ignore
 router.post('/me/fund_account', [permissionIsAuthenticatedMiddleware, validateRequestBodyMiddleware(UserFundAccount)], (req, res, next) => userController.fundUserAccount(req, res, next))

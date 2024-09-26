@@ -5,9 +5,12 @@ import {CachePort} from "../../ports/cache";
 import GameEventService from "./event/service";
 import Bet from "../bet";
 import BetService from "../bet/service";
-import {DateTimeHelpers} from "../../ports/helpers/commons/date_time";
 import {GameEventTeamEnum, GameEventTypeEnum} from "./event/enums";
-import {BetPickEnum, BetTypeEnum} from "../bet/enums";
+import {BetPickEnum, BetStateEnum, BetTypeEnum} from "../bet/enums";
+import {WebsocketPayloadDataType} from "../../ports/ws/data_types";
+import WSDispatcher from "../../ports/ws/dispatcher";
+import CustomException from "../../ports/helpers/exceptions/custom_exception";
+import {HTTPResponseStatusCode} from "../../ports/helpers/definitions/response";
 
 type GameServiceParams = {
     gameRepository: any;
@@ -16,7 +19,8 @@ type GameServiceParams = {
     logger: LoggerPort
     cache: CachePort
     gameEventService: GameEventService,
-    betService: BetService
+    betService: BetService,
+    wsDispatcher: WSDispatcher
 };
 
 export default class GameService {
@@ -27,6 +31,7 @@ export default class GameService {
     private cache: CachePort;
     private gameEventService: GameEventService;
     private betService: BetService
+    private wsDispatcher: WSDispatcher
 
 
     constructor(params: GameServiceParams) {
@@ -37,6 +42,7 @@ export default class GameService {
         this.cache = params.cache;
         this.gameEventService = params.gameEventService;
         this.betService = params.betService;
+        this.wsDispatcher = params.wsDispatcher;
     }
 
     async createGame(data: GameParams): Promise<Game> {
@@ -73,38 +79,48 @@ export default class GameService {
     }
 
     async generateNewEvent(id: string): Promise<GameEvent | void> {
-        let cachedGameData: Game = await this.cache.getValue(id)
-        if (!cachedGameData) {
-            const gameRes = await this.fetchSingleGame(id)
-            await this.cache.setValue(id, gameRes)
-            cachedGameData = gameRes
-        }
-        let minute = DateTimeHelpers.computeSecondsBetweenStartEndTime(cachedGameData.startedAt as Date) / 60
-        // Goal probability increases toward the end of each half
-        const goalProbability = minute > 80 ? 0.1 : minute > 40 ? 0.05 : 0.02;
-        // Red card probability increases in the second half
-        const redCardProbability = minute > 60 ? 0.01 : 0.003;
-        // Substitution probability is higher after halftime
-        const substitutionProbability = minute > 45 ? 0.07 : 0.01;
-        // Yellow card probability increases after 15 minutes and more after 60 minutes
-        const yellowCardProbability = minute > 60 ? 0.05 : minute > 15 ? 0.02 : 0.005;
-        const rand = Math.random();
-        let eventType;
-        let eventTeam = Math.random() < 0.5 ? GameEventTeamEnum.HOME : GameEventTeamEnum.AWAY;
-        let eventPlayer;
-        if (rand < goalProbability) {
-            eventType = GameEventTypeEnum.GOAL;
-        } else if (rand < goalProbability + redCardProbability) {
-            eventType = GameEventTypeEnum.RED_CARD;
-        } else if (rand < goalProbability + redCardProbability + substitutionProbability) {
-            eventType = GameEventTypeEnum.SUBSTITUTION;
-        } else if (rand < goalProbability + redCardProbability + substitutionProbability + yellowCardProbability) {
-            eventType = GameEventTypeEnum.YELLOW_CARD
-        }
-        // @ts-ignore
-        if (eventType) {
+        // let cachedGameData: Game = await this.cache.getValue(id)
+        // if (!cachedGameData) {
+        //     const gameRes = await this.fetchSingleGame(id)
+        //     await this.cache.setValue(id, gameRes)
+        //     cachedGameData = gameRes
+        // }
+        // let minute = DateTimeHelpers.computeSecondsBetweenStartEndTime(cachedGameData.startedAt as Date) / 60
+        // // Goal probability increases toward the end of each half
+        // const goalProbability = minute > 80 ? 0.1 : minute > 40 ? 0.05 : 0.02;
+        // // Red card probability increases in the second half
+        // const redCardProbability = minute > 60 ? 0.01 : 0.003;
+        // // Substitution probability is higher after halftime
+        // const substitutionProbability = minute > 45 ? 0.07 : 0.01;
+        // // Yellow card probability increases after 15 minutes and more after 60 minutes
+        // const yellowCardProbability = minute > 60 ? 0.05 : minute > 15 ? 0.02 : 0.005;
+        // const rand = Math.random();
+        // let eventType;
+        // let eventTeam = Math.random() < 0.5 ? GameEventTeamEnum.HOME : GameEventTeamEnum.AWAY;
+        // let eventPlayer;
+        // if (rand < goalProbability) {
+        //     eventType = GameEventTypeEnum.GOAL;
+        // } else if (rand < goalProbability + redCardProbability) {
+        //     eventType = GameEventTypeEnum.RED_CARD;
+        // } else if (rand < goalProbability + redCardProbability + substitutionProbability) {
+        //     eventType = GameEventTypeEnum.SUBSTITUTION;
+        // } else if (rand < goalProbability + redCardProbability + substitutionProbability + yellowCardProbability) {
+        //     eventType = GameEventTypeEnum.YELLOW_CARD
+        // }
+        // // @ts-ignore
+        // if (eventType) {
+        //     const game: Game = new Game(await this.fetchSingleGame(id))
+        //     const mockEvent: Partial<GameEventParams> = game.generate_new_event({type: eventType, team: eventTeam})
+        //     const event: GameEvent = await this.gameEventService.createGameEvent(mockEvent as GameEventParams)
+        //     if (game.isOngoing) {
+        //         await this.cache.setValue(event._id as string, event)
+        //         await this.cache.addKeyToSet(event._id as string, game.cache_set_key_events)
+        //     }
+        //     return event
+        // }
+        if (Math.random() < 0.5) {
             const game: Game = new Game(await this.fetchSingleGame(id))
-            const mockEvent: Partial<GameEventParams> = game.generate_new_event({type: eventType, team: eventTeam})
+            const mockEvent: Partial<GameEventParams> = game.generate_new_event()
             const event: GameEvent = await this.gameEventService.createGameEvent(mockEvent as GameEventParams)
             if (game.isOngoing) {
                 await this.cache.setValue(event._id as string, event)
@@ -115,11 +131,45 @@ export default class GameService {
 
     }
 
+    async placeBet(id: string, userId: string, betType: BetTypeEnum, betPick: BetPickEnum, amount: number): Promise<Bet> {
+        const game: Game = new Game(await this.fetchSingleGame(id));
+        if (!game.isOngoing) {
+            throw new CustomException({
+                status_code: HTTPResponseStatusCode.BAD_REQUEST,
+                message: "You can only place bets on live games",
+                errors: ["invalid_request"]
+            })
+        }
+        let odds;
+        if (betType === BetTypeEnum.WINNER) {
+            if (betPick === BetPickEnum.AWAY) {
+                // @ts-ignore
+                odds = game.oddsAwayWin || game.defaultOddsAwayWin
+            } else {
+                // @ts-ignore
+                odds = game.oddsHomeWin || game.defaultOddsHomeWin
+            }
+        } else if (betType === BetTypeEnum.SCORE_EXACT) {
+            // @ts-ignore
+            odds = game.defaultOddsDraw || game.oddsDraw
+            betPick = BetPickEnum.DRAW
+        }
+        return await this.betService.createBet({
+            userId,
+            gameId: game._id as string,
+            betType,
+            betPick,
+            amount,
+            odds,
+            state: BetStateEnum.PENDING
+        })
+    }
+
     async getEvents(id: string): Promise<GameEvent[]> {
         // @ts-ignore
         const game: Game = new Game(await this.fetchSingleGame(id))
-        let events = await this.cache.retrieveSetMembers(game.cache_set_key_events);
-        if (events) {
+        let events = await this.cache.retrieveSetMembers(game.cache_set_key_events) || [];
+        if (events.length) {
             const newEvents = []
             for (let item of events) {
                 const cached_item = await this.cache.getValue(item)
@@ -140,8 +190,10 @@ export default class GameService {
             const response = await this.gameEventService?.fetchMultipleGameEvents(filterParams)
             if (response) {
                 for (let item of response) {
-                    await this.cache.setValue(item._id as string, item)
-                    await this.cache.addKeyToSet(item._id as string, game.cache_set_key_events)
+                    if (game.isOngoing) {
+                        await this.cache.setValue(item._id as string, item)
+                        await this.cache.addKeyToSet(item._id as string, game.cache_set_key_events)
+                    }
                 }
             }
             return response || []
@@ -151,8 +203,8 @@ export default class GameService {
     async getBets(id: string): Promise<Bet[]> {
         // @ts-ignore
         const game: Game = new Game(await this.fetchSingleGame(id))
-        let bets = await this.cache.retrieveSetMembers(game.cache_set_key_betting_histories);
-        if (bets) {
+        let bets = await this.cache.retrieveSetMembers(game.cache_set_key_betting_histories) || [];
+        if (bets.length) {
             const newBets = []
             for (let item of bets) {
                 const cached_item = await this.cache.getValue(item)
@@ -173,8 +225,10 @@ export default class GameService {
             const response = await this.betService?.fetchMultipleBets(filterParams)
             if (response) {
                 for (let item of response) {
-                    await this.cache.setValue(item._id as string, item)
-                    await this.cache.addKeyToSet(item._id as string, game.cache_set_key_betting_histories)
+                    if (game.isOngoing) {
+                        await this.cache.setValue(item._id as string, item)
+                        await this.cache.addKeyToSet(item._id as string, game.cache_set_key_betting_histories)
+                    }
                 }
             }
             return response || []
@@ -205,7 +259,9 @@ export default class GameService {
             cachedGameData.oddsDraw = resNewOdds.oddsDraw
             await this.cache.setValue(id, cachedGameData)
         }
+        this.wsDispatcher.dispatchData(WebsocketPayloadDataType.GAME, cachedGameData)
         return cachedGameData
+
     }
 
     async clearGameCache(id: string): Promise<void> {
@@ -242,6 +298,7 @@ export default class GameService {
                 }
             });
         }
+        console.log(homeScore, awayScore, "after game")
         // @ts-ignore
         const userBets = await this.getBets(id)
         if (userBets) {

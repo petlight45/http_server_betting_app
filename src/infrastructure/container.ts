@@ -21,6 +21,7 @@ import BetRepository from "../adapters/repository/bet";
 import BetService from "../core/bet/service";
 import UserTransactionRepository from "../adapters/repository/user_transaction";
 import UserTransactionService from "../core/user/user_transaction/service";
+import WSDispatcher from "../ports/ws/dispatcher";
 
 type ContainerDependencies = {
     userRepository: UserRepository;
@@ -42,6 +43,7 @@ type ContainerDependencies = {
     BGJobController: BGJobController,
     BGJobCaller: BGJobCaller,
     cache: CachePort,
+    wsDispatcher: WSDispatcher
 }
 AppConfig.initiate()
 const container: AwilixContainer<ContainerDependencies> = createContainer<ContainerDependencies>();
@@ -67,6 +69,7 @@ container.register({
     BGJobController: asClass(BGJobController,).singleton(),
     BGJobCaller: asClass(BGJobCaller).singleton(),
     cache: asClass(RedisAdapter,).singleton(),
+    wsDispatcher: asClass(WSDispatcher).singleton()
 });
 
 

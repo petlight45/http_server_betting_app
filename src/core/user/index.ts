@@ -17,6 +17,7 @@ export default class User {
         Object.assign(this, params);
     }
 
+
     get data(): Partial<UserParams> {
         return ObjectsHelpers.extractAttributesToData(this)
     }
@@ -32,5 +33,17 @@ export default class User {
             delete data_[field]
         }
         return data_
+    }
+
+    get cache_set_key_bets(): string {
+        return `USER:${this._id}:BETS`
+    }
+
+    get cache_key_leaderboard_stat(): string {
+        return `USER:${this._id}:LEADERBOARD_STAT`
+    }
+
+    static get cache_key_leaderboard_stat_all(): string {
+        return `USER:ALL:LEADERBOARD_STAT`
     }
 }

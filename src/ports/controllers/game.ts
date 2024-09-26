@@ -115,4 +115,18 @@ export default class GameController {
         return res.status(HTTPResponseStatusCode.SUCCESS).json(activeGames);
     }
 
+    async placeBetOnGame(req: Request, res: Response, next: NextFunction): Promise<Response | void> {
+        // @ts-ignore
+        const userId = req?.user?._id
+        const {amount, betType, betPick} = req.body;
+        const bet = await ExceptionsHelper.executeCallbackAsync({
+            // @ts-ignore
+            callback: async () => (await this.gameService.placeBet(req.params.id, userId, betType, betPick, amount)),
+            on_error: next
+        });
+        // @ts-ignore
+        return bet.is_success && res.status(HTTPResponseStatusCode.SUCCESS).json(bet.data);
+    }
+
+
 }
