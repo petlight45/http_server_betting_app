@@ -12,14 +12,16 @@ services:
     env_file:
       - .env
     ports:
-      - 6008:5000
+      - 5000:5000
     depends_on:
       - mongodb
     volumes:
       - ../logs/betting-app/http_server/:/app/logs
   worker:
     <<: *app_base
-    command: bash -c "/wait && npm run worker"
+    command: bash -c "/wait && npm run worker_live"
+    ports:
+      - 5001:5000
     volumes:
       - ../logs/betting-app/worker/:/app/logs
   redis:
